@@ -709,6 +709,7 @@ let main =
 
     (* Base mutant *)
     if not (!nobase) && !only_mutant = None then begin
+      Printf.printf "\n";
       highlight Header "Testing base...";
       (* Entire file structure is copied *)
       output_mut_dir tmp_dir base;
