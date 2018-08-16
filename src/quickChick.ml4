@@ -59,13 +59,21 @@ let link_files = []
 (* FIX: There is probably a more elegant place to put this flag! *)
 let ocamlopt = "ocamlopt -unsafe-string"
 let ocamlc = "ocamlc -unsafe-string"
+let ocamlbuild = "ocamlbuild -use-ocamlfind -quiet"
 
+(*
 let comp_ml_cmd fn out =
   let path = Lazy.force path in
   let link_files = List.map (Filename.concat path) link_files in
   let link_files = String.concat " " link_files in
   Printf.sprintf "%s -rectypes -w a -I %s -I %s %s %s -o %s" ocamlopt
     (Filename.dirname fn) path link_files fn out
+ *)
+
+let comp_ml_cmd out =
+  let dir  = Filename.dirname  out in
+  let base = Filename.basename out in
+  Printf.sprintf "cd %s; %s %s" dir ocamlbuild base
 
 (*
 let comp_mli_cmd fn =
@@ -122,8 +130,13 @@ let define_and_run c =
   let mlf = new_ml_file () in
   let execn = Filename.chop_extension mlf in
   let mlif = execn ^ ".mli" in
+  let nativef = execn ^ ".native" in
   let warnings = CWarnings.get_flags () in
   let mute_extraction = warnings ^ (if warnings = "" then "" else ",") ^ "-extraction-opaque-accessed" in
+  let tags_f  = Filename.dirname mlf ^ "/_tags" in
+  let tags_oc = open_out_gen [Open_creat;Open_wronly;Open_text] 0o666 tags_f in
+  Printf.fprintf tags_oc "true: package(coq.extractionlib), rectypes, thread";
+  close_out tags_oc;
   CWarnings.set_flags mute_extraction;
   Flags.silently (Extraction_plugin.Extract_env.full_extraction (Some mlf)) [qualid_of_ident main];
   CWarnings.set_flags warnings;
@@ -151,20 +164,20 @@ let define_and_run c =
   (* TODO: Maxime, thoughts? *)
   (** LEO: However, sometimes the inferred types are too abstract. So we touch the .mli to close the weak types. **)
   let _exit_code = Sys.command ("touch " ^ mlif) in
-  (*
-  Printf.printf "Extracted ML file: %s\n" mlf;
-  Printf.printf "Compile command: %s\n" (comp_ml_cmd mlf execn);
+  msg_debug (str (Printf.sprintf "Extracted ML file: %s\n" mlf));
+  msg_debug (str (Printf.sprintf "Compile command: %s\n" (comp_ml_cmd nativef)));
   flush_all ();
-  *)
   (* Compile the (empty) .mli *)
+  (*
   if Sys.command (comp_mli_cmd mlif) <> 0 then CErrors.user_err (str "Could not compile mli file" ++ fnl ());
-  if Sys.command (comp_ml_cmd mlf execn) <> 0 then
+   *)
+  if Sys.command (comp_ml_cmd nativef) <> 0 then
     (CErrors.user_err (str "Could not compile test program" ++ fnl ()); None)
 
   (** Run the test *)
   else
     (* Should really be shared across this and the tool *)
-    let chan = Unix.open_process_in execn in
+    let chan = Unix.open_process_in nativef in
     let builder = ref [] in
     let rec process_otl_aux () =
       let e = input_line chan in
@@ -190,7 +203,7 @@ let define_and_run c =
 (*
     (** If we want to print the time spent in tests *)
 (*    let execn = "time " ^ execn in *)
-    if Sys.command execn <> 0 then
+    if Sys.command nativef <> 0 then
       CErrors.user_err (str "Could not run test" ++ fnl ())
  *)
 
@@ -229,7 +242,7 @@ let set_debug_flag (flag_name : string) (mode : string) =
 (*    | "Warn"  -> flag_warn
     | "Error" -> flag_error *)
   in
-  reference := toggle 
+  reference := toggle
 (*  Libobject.declare_object
     {(Libobject.default_object ("QC_debug_flag: " ^ flag_name)) with
        cache_function = (fun (_,(flag_name, mode)) -> reference flag_name := toggle mode);
