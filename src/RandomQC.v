@@ -39,9 +39,13 @@ Definition right_rst (rst : RandomSeedTree) : RandomSeedTree :=
   | RstNode _ _ t2 => t2
   end.
 
+Set Lax CoInductive Match.
+
 Lemma rst_eta : forall rst : RandomSeedTree,
   rst = RstNode (root_rst rst) (left_rst rst) (right_rst rst).
 Proof. destruct rst. reflexivity. Qed.
+
+Unset Lax CoInductive Match.
 
 CoFixpoint mkSeedTree (s : RandomSeed) : RandomSeedTree :=
   let (s1, s2) := randomSplit s in
